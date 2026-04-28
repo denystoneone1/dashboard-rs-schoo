@@ -814,7 +814,7 @@ function renderFilterPopup() {
     <div class="floating" data-floating>
       <h4>Filter ${labelFor(key)}</h4>
       ${isPosition ? `
-        <select name="filterValue">
+        <select name="filterValue" data-action="filter-position-change">
           <option value="">Any position</option>
           ${POSITIONS.map((position) => option(position, position, currentValue)).join("")}
         </select>
@@ -837,9 +837,10 @@ function renderAssignPopup(data, employeeId) {
   const employee = data.employees.find((item) => item.id === employeeId);
   const assigned = getAssignedCapacity(employee);
   const available = Math.max(0, 1.5 - assigned);
-  const selectedProject = data.projects.find((project) => project.id === state.floating.projectId)
-    || data.projects.find((project) => !employee.assignments.some((assignment) => assignment.projectId === project.id))
-    || data.projects[0];
+  const assignedProjectIds = new Set(employee.assignments.map((assignment) => assignment.projectId));
+  const availableProjects = data.projects.filter((project) => !assignedProjectIds.has(project.id));
+  const selectedProject = availableProjects.find((project) => project.id === state.floating.projectId)
+    || availableProjects[0];
   const capacity = Math.min(available, Number(state.floating.capacity ?? 0.5));
   const fit = Number(state.floating.fit ?? 1);
   const projectMetrics = selectedProject ? getProjectMetrics(data, selectedProject) : null;
@@ -849,7 +850,9 @@ function renderAssignPopup(data, employeeId) {
       <p class="muted">Current capacity ${formatNumber(assigned, 1)}/1.5 · available ${formatNumber(available, 1)}</p>
       <label class="form-field">Project
         <select name="projectId" data-action="assign-project-change">
-          ${data.projects.map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${escapeHtml(project.projectName)} (${formatNumber(getProjectMetrics(data, project).usedCapacity, 1)}/${project.capacity})</option>`).join("")}
+          ${availableProjects.length
+            ? availableProjects.map((project) => `<option value="${project.id}" ${selectedProject?.id === project.id ? "selected" : ""}>${escapeHtml(project.projectName)} (${formatNumber(getProjectMetrics(data, project).usedCapacity, 1)}/${project.capacity})</option>`).join("")
+            : `<option value="">No available projects</option>`}
         </select>
       </label>
       <label class="form-field">Capacity
@@ -986,6 +989,11 @@ function handleChange(event) {
   }
   if (target.dataset.action === "assign-project-change") {
     state.floating.projectId = target.value;
+    render();
+  }
+  if (target.dataset.action === "filter-position-change") {
+    state.filters.employees.position = target.value;
+    state.floating = null;
     render();
   }
 }
@@ -1162,14 +1170,15 @@ function applyValidation(form, result) {
 function validateProjectForm(formData) {
   const errors = {};
   const namePattern = /^[a-z0-9 ]+$/i;
+  const decimalPattern = /^\d+(\.\d{1,2})?$/;
   if (!namePattern.test(formData.get("projectName")?.trim() || "") || formData.get("projectName").trim().length < 3) {
     errors.projectName = "Use at least 3 alphanumeric characters.";
   }
   if (!namePattern.test(formData.get("companyName")?.trim() || "") || formData.get("companyName").trim().length < 2) {
     errors.companyName = "Use at least 2 alphanumeric characters.";
   }
-  if (Number(formData.get("budget")) <= 0) {
-    errors.budget = "Budget must be positive.";
+  if (!decimalPattern.test(formData.get("budget") || "") || Number(formData.get("budget")) <= 0) {
+    errors.budget = "Budget must be positive with up to 2 decimals.";
   }
   if (!Number.isInteger(Number(formData.get("capacity"))) || Number(formData.get("capacity")) < 1) {
     errors.capacity = "Capacity must be an integer of at least 1.";
@@ -1185,6 +1194,7 @@ function validateProjectForm(formData) {
 function validateEmployeeForm(formData) {
   const errors = {};
   const textPattern = /^[a-z]+$/i;
+  const decimalPattern = /^\d+(\.\d{1,2})?$/;
   if (!textPattern.test(formData.get("name")?.trim() || "") || formData.get("name").trim().length < 3) {
     errors.name = "Use at least 3 letters.";
   }
@@ -1197,8 +1207,8 @@ function validateEmployeeForm(formData) {
   if (!POSITIONS.includes(formData.get("position"))) {
     errors.position = "Select a position.";
   }
-  if (Number(formData.get("salary")) <= 0) {
-    errors.salary = "Salary must be positive.";
+  if (!decimalPattern.test(formData.get("salary") || "") || Number(formData.get("salary")) <= 0) {
+    errors.salary = "Salary must be positive with up to 2 decimals.";
   }
   return { valid: Object.keys(errors).length === 0, errors };
 }
@@ -1227,6 +1237,7 @@ function openFilter(trigger) {
     type: "filter",
     scope: trigger.dataset.scope,
     key: trigger.dataset.key,
+    anchorSelector: `[data-action="open-filter"][data-scope="${trigger.dataset.scope}"][data-key="${trigger.dataset.key}"]`,
     anchor: { x: rect.left, y: rect.bottom }
   };
   render();
@@ -1360,6 +1371,7 @@ function openAssign(trigger) {
   state.floating = {
     type: "assign",
     employeeId: trigger.dataset.employeeId,
+    anchorSelector: `[data-action="open-assign"][data-employee-id="${trigger.dataset.employeeId}"]`,
     anchor: { x: rect.left, y: rect.bottom },
     capacity: 0.5,
     fit: 1
@@ -1379,6 +1391,9 @@ function assignEmployee(employeeId) {
   state.floating = null;
   updateCurrentData((data) => {
     const employee = data.employees.find((item) => item.id === employeeId);
+    if (!projectId || employee.assignments.some((assignment) => assignment.projectId === projectId)) {
+      return;
+    }
     employee.assignments.push({ projectId, capacity, fit });
   });
 }
@@ -1497,6 +1512,11 @@ function repositionFloatingPopup() {
   const descriptor = state.floating || state.actionMenu;
   if (!popup || !descriptor?.anchor) {
     return;
+  }
+  const anchor = descriptor.anchorSelector ? document.querySelector(descriptor.anchorSelector) : null;
+  if (anchor) {
+    const rect = anchor.getBoundingClientRect();
+    descriptor.anchor = { x: rect.left, y: rect.bottom };
   }
   const width = popup.offsetWidth;
   const height = popup.offsetHeight;
