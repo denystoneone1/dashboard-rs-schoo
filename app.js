@@ -837,7 +837,9 @@ function renderAssignPopup(data, employeeId) {
   const employee = data.employees.find((item) => item.id === employeeId);
   const assigned = getAssignedCapacity(employee);
   const available = Math.max(0, 1.5 - assigned);
-  const selectedProject = data.projects.find((project) => !employee.assignments.some((assignment) => assignment.projectId === project.id)) || data.projects[0];
+  const selectedProject = data.projects.find((project) => project.id === state.floating.projectId)
+    || data.projects.find((project) => !employee.assignments.some((assignment) => assignment.projectId === project.id))
+    || data.projects[0];
   const capacity = Math.min(available, Number(state.floating.capacity ?? 0.5));
   const fit = Number(state.floating.fit ?? 1);
   const projectMetrics = selectedProject ? getProjectMetrics(data, selectedProject) : null;
@@ -1087,6 +1089,7 @@ function submitProject() {
     validateVisibleForms();
     return;
   }
+  state.panel = null;
   updateCurrentData((data) => {
     data.projects.push(createProject(
       formData.get("projectName").trim(),
@@ -1095,7 +1098,6 @@ function submitProject() {
       Number(formData.get("capacity"))
     ));
   });
-  state.panel = null;
 }
 
 /**
@@ -1109,6 +1111,7 @@ function submitEmployee() {
     validateVisibleForms();
     return;
   }
+  state.panel = null;
   updateCurrentData((data) => {
     data.employees.push(createEmployee(
       formData.get("name").trim(),
@@ -1118,7 +1121,6 @@ function submitEmployee() {
       Number(formData.get("salary"))
     ));
   });
-  state.panel = null;
 }
 
 /**
@@ -1342,10 +1344,11 @@ function toggleVacationDay(day) {
  */
 function saveVacation(employeeId) {
   const days = state.modal.days || [];
-  editEmployee(employeeId, (employee) => {
+  state.modal = null;
+  updateCurrentData((data) => {
+    const employee = data.employees.find((item) => item.id === employeeId);
     employee.vacations = days;
   });
-  state.modal = null;
 }
 
 /**
@@ -1373,11 +1376,11 @@ function assignEmployee(employeeId) {
   const projectId = state.floating.projectId || popup.querySelector("[name='projectId']").value;
   const capacity = Number(popup.querySelector("[name='capacity']").value);
   const fit = Number(popup.querySelector("[name='fit']").value);
+  state.floating = null;
   updateCurrentData((data) => {
     const employee = data.employees.find((item) => item.id === employeeId);
     employee.assignments.push({ projectId, capacity, fit });
   });
-  state.floating = null;
 }
 
 /**
@@ -1401,11 +1404,11 @@ function openActionMenu(trigger) {
  * @param {string} projectId Project id.
  */
 function unassignEmployee(employeeId, projectId) {
+  state.modal = null;
   updateCurrentData((data) => {
     const employee = data.employees.find((item) => item.id === employeeId);
     employee.assignments = employee.assignments.filter((assignment) => assignment.projectId !== projectId);
   });
-  state.modal = null;
 }
 
 /**
@@ -1416,13 +1419,13 @@ function unassignEmployee(employeeId, projectId) {
 function saveAssignment(employeeId, projectId) {
   const form = document.querySelector("[data-form='edit-assignment']");
   const formData = new FormData(form);
+  state.modal = null;
   updateCurrentData((data) => {
     const employee = data.employees.find((item) => item.id === employeeId);
     const assignment = employee.assignments.find((item) => item.projectId === projectId);
     assignment.capacity = Number(formData.get("capacity"));
     assignment.fit = Number(formData.get("fit"));
   });
-  state.modal = null;
 }
 
 /**
