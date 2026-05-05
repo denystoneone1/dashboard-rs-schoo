@@ -1,9 +1,11 @@
 import {
   calculateAssignmentCost,
   calculateEffectiveCapacity,
+  calculateProjectEffectiveCapacity,
   countWorkingDays,
   formatCurrency,
-  getVacationCoefficient
+  getVacationCoefficient,
+  hasValidAssignments
 } from "./src/calculations.js";
 
 const STORAGE_KEY = "monthlyData";
@@ -1642,12 +1644,12 @@ function getAssignmentMetrics(data, employee, assignment) {
   if (!project) {
     return null;
   }
-  const allEffectiveCapacity = data.employees.reduce((sum, currentEmployee) => {
-    const matching = currentEmployee.assignments.find((item) => item.projectId === project.id);
-    if (!matching) return sum;
-    const vacationCoefficient = getVacationCoefficient(state.currentYear, state.currentMonth, currentEmployee.vacations);
-    return sum + calculateEffectiveCapacity(matching.capacity, matching.fit, vacationCoefficient);
-  }, 0);
+  const allEffectiveCapacity = calculateProjectEffectiveCapacity(
+    data.employees,
+    project.id,
+    state.currentYear,
+    state.currentMonth
+  );
   const capacityForRevenue = Math.max(project.capacity, allEffectiveCapacity);
   const revenuePerEffectiveCapacity = project.budget / capacityForRevenue;
   const vacationCoefficient = getVacationCoefficient(state.currentYear, state.currentMonth, employee.vacations);
@@ -1673,7 +1675,7 @@ function getAssignmentMetrics(data, employee, assignment) {
 function getDashboardMetrics(data) {
   const projectIncome = data.projects.reduce((sum, project) => sum + getProjectMetrics(data, project).income, 0);
   const benchCost = data.employees
-    .filter((employee) => employee.assignments.length === 0)
+    .filter((employee) => !hasValidAssignments(employee, data.projects))
     .reduce((sum, employee) => sum + employee.salary * 0.5, 0);
   return { totalEstimatedIncome: projectIncome - benchCost };
 }

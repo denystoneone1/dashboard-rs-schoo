@@ -58,6 +58,38 @@ export function calculateAssignmentCost(salary, capacity) {
 }
 
 /**
+ * Checks whether an employee has at least one assignment linked to an existing project.
+ * @param {{assignments: Array}} employee Employee object.
+ * @param {Array<{id: string}>} projects Project list.
+ * @returns {boolean}
+ */
+export function hasValidAssignments(employee, projects) {
+  return employee.assignments.some((assignment) => {
+    return projects.some((project) => project.id === assignment.projectId);
+  });
+}
+
+/**
+ * Sums all effective capacities assigned to a project across all employees.
+ * @param {Array} employees Employee list.
+ * @param {string} projectId Project id.
+ * @param {number} year Calendar year.
+ * @param {number} month Zero-based month.
+ * @returns {number}
+ */
+export function calculateProjectEffectiveCapacity(employees, projectId, year, month) {
+  return employees.reduce((sum, currentEmployee) => {
+    const matchingAssignments = currentEmployee.assignments.filter((item) => item.projectId === projectId);
+    if (!matchingAssignments.length) return sum;
+    const vacationCoefficient = getVacationCoefficient(year, month, currentEmployee.vacations);
+    const employeeEffectiveCapacity = matchingAssignments.reduce((total, matching) => {
+      return total + calculateEffectiveCapacity(matching.capacity, matching.fit, vacationCoefficient);
+    }, 0);
+    return sum + employeeEffectiveCapacity;
+  }, 0);
+}
+
+/**
  * Formats a number as USD currency for dashboard tables.
  * @param {number} value Numeric amount.
  * @returns {string}
