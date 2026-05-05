@@ -4,7 +4,7 @@
   "description": "Employee and project dashboard with monthly snapshots.",
   "type": "module",
   "scripts": {
-    "lint": "node --check app.js && node --check tests/calculations.test.js",
+    "lint": "node --check app.js && node --check src/calculations.js && node --check src/constants.js && node --check src/dashboard-metrics.js && node --check src/data-store.js && node --check src/date-utils.js && node --check src/table-helpers.js && node --check src/validation.js && node --check src/view-utils.js && node --check src/views/dashboard-view.js && node --check tests/calculations.test.js",
     "test": "node tests/calculations.test.js",
     "start": "python3 -m http.server 4173"
   },
